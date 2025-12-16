@@ -1,0 +1,30 @@
+{
+  "servers": [
+    {
+      "id": "filesystem",
+      "name": "Filesystem Server",
+      "description": "Access local filesystem",
+      "enabled": true,
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/path/to/your/project"
+      ],
+      "url": null,
+      "headers": {},
+      "env": {},
+      "timeout": 30,
+      "sse_read_timeout": 300
+    }
+  ],
+  "default_model": {
+    "provider": "openai",
+    "model_id": "gpt-4o-mini",
+    "api_key_env": null,
+    "base_url": null,
+    "temperature": 0.7,
+    "max_tokens": null
+  }
+}
