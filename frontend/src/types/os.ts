@@ -422,3 +422,35 @@ export interface UpdateMCPServerInput {
   timeout?: number
   sse_read_timeout?: number
 }
+
+/**
+ * MCP Server Status Types
+ */
+
+export type MCPServerConnectionStatus = 'connected' | 'failed' | 'disabled' | 'not_configured'
+
+export interface MCPServerTool {
+  name: string
+  description: string
+}
+
+export interface MCPServerStatus {
+  id: string
+  name: string
+  enabled: boolean
+  status: MCPServerConnectionStatus
+  tools_count: number
+  tools: MCPServerTool[]
+  error: string | null
+}
+
+export interface MCPServersStatusResponse {
+  servers: MCPServerStatus[]
+  summary: {
+    total: number
+    enabled: number
+    connected: number
+    failed: number
+    total_tools: number
+  }
+}

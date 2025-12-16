@@ -195,7 +195,7 @@ export function ConnectionDialog({
             <Label htmlFor="endpoint">Endpoint URL</Label>
             <Input
               id="endpoint"
-              placeholder="http://localhost:7777"
+              placeholder="http://localhost:8888"
               value={endpoint}
               onChange={(e) => setEndpoint(e.target.value)}
               autoComplete="off"

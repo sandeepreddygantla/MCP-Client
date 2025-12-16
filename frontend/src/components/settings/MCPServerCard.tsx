@@ -1,11 +1,13 @@
 'use client'
 
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import Icon from '@/components/ui/icon'
-import type { MCPServer } from '@/types/os'
+import type { MCPServer, MCPServerStatus } from '@/types/os'
 
 interface MCPServerCardProps {
   server: MCPServer
+  status?: MCPServerStatus
   onEdit: (server: MCPServer) => void
   onDelete: (id: string) => void
   onToggle: (id: string, enabled: boolean) => void
@@ -13,10 +15,12 @@ interface MCPServerCardProps {
 
 export function MCPServerCard({
   server,
+  status,
   onEdit,
   onDelete,
   onToggle
 }: MCPServerCardProps) {
+  const [showTools, setShowTools] = useState(false)
   const getTransportIcon = (transport: string) => {
     switch (transport) {
       case 'stdio':
@@ -61,15 +65,53 @@ export function MCPServerCard({
             <h3 className="text-sm font-medium text-foreground truncate">
               {server.name}
             </h3>
-            <span
-              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                server.enabled
-                  ? 'bg-green-500/10 text-green-500'
-                  : 'bg-gray-500/10 text-gray-500'
-              }`}
-            >
-              {server.enabled ? 'Enabled' : 'Disabled'}
-            </span>
+            {/* Connection Status Badge */}
+            {status ? (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  status.status === 'connected'
+                    ? 'bg-green-500/10 text-green-500'
+                    : status.status === 'failed'
+                    ? 'bg-red-500/10 text-red-500'
+                    : 'bg-gray-500/10 text-gray-500'
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${
+                  status.status === 'connected'
+                    ? 'bg-green-500'
+                    : status.status === 'failed'
+                    ? 'bg-red-500'
+                    : 'bg-gray-500'
+                }`} />
+                {status.status === 'connected' ? 'Connected' :
+                 status.status === 'failed' ? 'Failed' : 'Disabled'}
+              </span>
+            ) : (
+              <span
+                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  server.enabled
+                    ? 'bg-yellow-500/10 text-yellow-500'
+                    : 'bg-gray-500/10 text-gray-500'
+                }`}
+              >
+                {server.enabled ? 'Pending' : 'Disabled'}
+              </span>
+            )}
+            {/* Tools Count Badge */}
+            {status && status.tools_count > 0 && (
+              <button
+                onClick={() => setShowTools(!showTools)}
+                className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary hover:bg-primary/20 transition-colors"
+              >
+                <Icon type="terminal" size="xs" className="w-3 h-3" />
+                {status.tools_count} {status.tools_count === 1 ? 'tool' : 'tools'}
+                <Icon
+                  type={showTools ? 'chevron-up' : 'chevron-down'}
+                  size="xs"
+                  className="w-3 h-3"
+                />
+              </button>
+            )}
           </div>
 
           {server.description && (
@@ -139,6 +181,36 @@ export function MCPServerCard({
           </Button>
         </div>
       </div>
+
+      {/* Expandable Tools List */}
+      {showTools && status && status.tools.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-border/20">
+          <div className="text-[10px] font-medium text-foreground-secondary mb-2 uppercase">
+            Available Tools
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {status.tools.map((tool) => (
+              <span
+                key={tool.name}
+                className="inline-flex items-center rounded bg-accent px-2 py-1 text-[10px] font-mono text-foreground-secondary"
+                title={tool.description || tool.name}
+              >
+                {tool.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Error Message */}
+      {status?.error && (
+        <div className="mt-3 pt-3 border-t border-red-500/20">
+          <div className="flex items-start gap-2 text-[10px] text-red-500">
+            <Icon type="alert-triangle" size="xs" className="mt-0.5 shrink-0" />
+            <span>{status.error}</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

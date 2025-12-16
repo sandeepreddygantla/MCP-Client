@@ -9,7 +9,7 @@ import { ConnectionDialog } from '@/components/settings/ConnectionDialog'
 import { MCPServerList } from '@/components/settings/MCPServerList'
 import { MCPServerDialog } from '@/components/settings/MCPServerDialog'
 import { useStore } from '@/store'
-import type { AgentOSConnection, CreateConnectionInput, MCPServer, CreateMCPServerInput } from '@/types/os'
+import type { AgentOSConnection, CreateConnectionInput, MCPServer, CreateMCPServerInput, MCPServerStatus, MCPServersStatusResponse } from '@/types/os'
 import { toast } from 'sonner'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 
@@ -34,24 +34,42 @@ export default function SettingsPage() {
 
   // MCP Server state
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([])
+  const [mcpServerStatus, setMcpServerStatus] = useState<Record<string, MCPServerStatus>>({})
+  const [statusSummary, setStatusSummary] = useState<MCPServersStatusResponse['summary'] | null>(null)
   const [mcpDialogOpen, setMcpDialogOpen] = useState(false)
   const [editingMcpServer, setEditingMcpServer] = useState<MCPServer | undefined>(undefined)
   const [isLoadingMcp, setIsLoadingMcp] = useState(false)
   const [activeTab, setActiveTab] = useState<'connections' | 'mcp'>('connections')
 
-  // Get current connection endpoint
+  // Get current connection endpoint (uses env variable as fallback)
   const currentConnection = connections.find(c => c.id === selectedConnectionId)
-  const apiEndpoint = currentConnection?.endpoint || 'http://localhost:8888'
+  const defaultEndpoint = process.env.NEXT_PUBLIC_AGENTOS_ENDPOINT || 'http://localhost:8888'
+  const apiEndpoint = currentConnection?.endpoint || defaultEndpoint
 
-  // Fetch MCP servers
+  // Fetch MCP servers and their status
   const fetchMcpServers = useCallback(async () => {
     setIsLoadingMcp(true)
     try {
-      const response = await fetch(`${apiEndpoint}/api/servers`)
-      if (response.ok) {
-        const data = await response.json()
-        // API returns {servers: [...]} so extract the array
+      // Fetch servers config and status in parallel
+      const [serversRes, statusRes] = await Promise.all([
+        fetch(`${apiEndpoint}/api/servers`),
+        fetch(`${apiEndpoint}/api/servers/status`)
+      ])
+
+      if (serversRes.ok) {
+        const data = await serversRes.json()
         setMcpServers(Array.isArray(data) ? data : (data.servers || []))
+      }
+
+      if (statusRes.ok) {
+        const statusData: MCPServersStatusResponse = await statusRes.json()
+        // Create a map of server id to status for easy lookup
+        const statusMap: Record<string, MCPServerStatus> = {}
+        for (const server of statusData.servers) {
+          statusMap[server.id] = server
+        }
+        setMcpServerStatus(statusMap)
+        setStatusSummary(statusData.summary)
       }
     } catch (error) {
       console.error('Failed to fetch MCP servers:', error)
@@ -335,6 +353,26 @@ export default function SettingsPage() {
                 </p>
               </div>
 
+              {/* Status Summary */}
+              {statusSummary && (
+                <div className="mb-6 flex flex-wrap gap-3">
+                  <div className="flex items-center gap-2 rounded-lg bg-accent/50 px-3 py-2">
+                    <div className="h-2 w-2 rounded-full bg-green-500" />
+                    <span className="text-xs font-medium">{statusSummary.connected} Connected</span>
+                  </div>
+                  {statusSummary.failed > 0 && (
+                    <div className="flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2">
+                      <div className="h-2 w-2 rounded-full bg-red-500" />
+                      <span className="text-xs font-medium text-red-500">{statusSummary.failed} Failed</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 rounded-lg bg-accent/50 px-3 py-2">
+                    <Icon type="terminal" size="xs" className="text-foreground-secondary" />
+                    <span className="text-xs font-medium">{statusSummary.total_tools} Tools Available</span>
+                  </div>
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="mb-6 flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -367,6 +405,7 @@ export default function SettingsPage() {
               ) : (
                 <MCPServerList
                   servers={mcpServers}
+                  serverStatus={mcpServerStatus}
                   onEdit={handleEditMcpServer}
                   onDelete={handleDeleteMcpServer}
                   onToggle={handleToggleMcpServer}

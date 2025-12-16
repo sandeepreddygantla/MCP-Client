@@ -3,12 +3,13 @@ MCP Client Application
 
 Uses Agno's AgentOS to provide all standard endpoints automatically.
 Adds custom routes for MCP server management.
+
+IMPORTANT: AgentOS automatically manages MCPTools lifecycle (connect/disconnect).
+Do not use reload=True when serving as it can break MCP connections.
 """
 
 import os
-from pathlib import Path
 from typing import List, Optional
-from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,8 +32,9 @@ load_dotenv()
 
 # Global state
 config_manager = ConfigManager()
-mcp_tools_list: List[MCPTools] = []
 db: Optional[SqliteDb] = None
+# Track server_id -> MCPTools mapping for status reporting
+server_tools_map: dict[str, MCPTools] = {}
 
 
 def get_db() -> SqliteDb:
@@ -44,8 +46,11 @@ def get_db() -> SqliteDb:
     return db
 
 
-async def create_mcp_tools(server: MCPServerConfig) -> MCPTools:
-    """Create MCPTools instance from server configuration."""
+def create_mcp_tools_instance(server: MCPServerConfig) -> MCPTools:
+    """Create MCPTools instance from server configuration.
+
+    Note: Do NOT call connect() - AgentOS manages the lifecycle automatically.
+    """
     if server.transport == TransportType.STDIO:
         env = {**os.environ}
         env.update(server.env)
@@ -57,63 +62,55 @@ async def create_mcp_tools(server: MCPServerConfig) -> MCPTools:
         return MCPTools(server_params=server_params)
 
     elif server.transport == TransportType.SSE:
-        return MCPTools(
-            transport="sse",
-            url=server.url,
-            headers=server.headers or {},
-        )
+        kwargs = {
+            "transport": "sse",
+            "url": server.url,
+        }
+        if server.headers:
+            kwargs["headers"] = server.headers
+        return MCPTools(**kwargs)
 
     elif server.transport == TransportType.STREAMABLE_HTTP:
-        return MCPTools(
-            transport="streamable-http",
-            url=server.url,
-            headers=server.headers or {},
-        )
+        kwargs = {
+            "transport": "streamable-http",
+            "url": server.url,
+        }
+        if server.headers:
+            kwargs["headers"] = server.headers
+        return MCPTools(**kwargs)
 
     raise ValueError(f"Unknown transport type: {server.transport}")
 
 
-async def connect_mcp_servers() -> List[MCPTools]:
-    """Connect to all enabled MCP servers and return tools list."""
-    global mcp_tools_list
+def get_mcp_tools() -> List[MCPTools]:
+    """Get MCPTools instances for all enabled servers.
 
-    # Disconnect existing connections
-    for mcp_tool in mcp_tools_list:
-        try:
-            await mcp_tool.close()
-        except:
-            pass
+    AgentOS will automatically manage connection lifecycle.
+    Also stores mapping for status reporting.
+    """
+    global server_tools_map
+    server_tools_map = {}  # Reset mapping
 
-    mcp_tools_list = []
-
-    # Connect to enabled servers
     enabled_servers = config_manager.get_enabled_servers()
+    tools = []
 
     for server in enabled_servers:
         try:
-            mcp_tool = await create_mcp_tools(server)
-            await mcp_tool.connect()
-            mcp_tools_list.append(mcp_tool)
-            print(f"Connected to MCP server: {server.name}")
+            mcp_tool = create_mcp_tools_instance(server)
+            tools.append(mcp_tool)
+            server_tools_map[server.id] = mcp_tool
+            print(f"Configured MCP server: {server.name}")
         except Exception as e:
-            print(f"Failed to connect to MCP server '{server.name}': {e}")
+            print(f"Failed to configure MCP server '{server.name}': {e}")
 
-    return mcp_tools_list
-
-
-async def disconnect_mcp_servers():
-    """Disconnect from all MCP servers."""
-    global mcp_tools_list
-    for mcp_tool in mcp_tools_list:
-        try:
-            await mcp_tool.close()
-        except:
-            pass
-    mcp_tools_list = []
+    return tools
 
 
-def create_mcp_agent(tools: List[MCPTools]) -> Agent:
-    """Create the MCP agent with tools."""
+def create_mcp_agent() -> Agent:
+    """Create the MCP agent with tools.
+
+    MCPTools are passed directly - AgentOS handles connection lifecycle.
+    """
     config = config_manager.get_config()
     model_config = config.default_model
 
@@ -122,12 +119,15 @@ def create_mcp_agent(tools: List[MCPTools]) -> Agent:
         temperature=model_config.temperature,
     )
 
+    # Get MCP tools - AgentOS will manage their lifecycle
+    mcp_tools = get_mcp_tools()
+
     return Agent(
         id="mcp-agent",
         name="MCP Agent",
         description="AI assistant with MCP server tools",
         model=model,
-        tools=tools if tools else None,
+        tools=mcp_tools if mcp_tools else None,
         db=get_db(),
         add_history_to_context=True,
         num_history_runs=10,
@@ -176,23 +176,12 @@ class ModelUpdateRequest(BaseModel):
     max_tokens: Optional[int] = None
 
 
-# Create custom FastAPI app for MCP server management routes
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Application lifespan handler."""
-    print("Starting MCP Client...")
-    await connect_mcp_servers()
-    yield
-    print("Shutting down MCP Client...")
-    await disconnect_mcp_servers()
-
-
-# Create base FastAPI app with lifespan
+# Create base FastAPI app for custom MCP server management routes
+# Note: AgentOS handles the lifespan for MCPTools automatically
 base_app = FastAPI(
     title="MCP Client",
     description="A generic MCP client for connecting to any MCP server",
     version="1.0.0",
-    lifespan=lifespan,
 )
 
 # Add CORS middleware
@@ -212,6 +201,64 @@ async def list_servers():
     """List all configured MCP servers."""
     config = config_manager.get_config()
     return {"servers": [s.model_dump() for s in config.servers]}
+
+
+@base_app.get("/api/servers/status")
+async def get_servers_status():
+    """Get connection status and tools for all configured servers."""
+    config = config_manager.get_config()
+    status_list = []
+
+    for server in config.servers:
+        server_status = {
+            "id": server.id,
+            "name": server.name,
+            "enabled": server.enabled,
+            "status": "disabled",
+            "tools_count": 0,
+            "tools": [],
+            "error": None,
+        }
+
+        if server.enabled:
+            # Check if we have a tools instance for this server
+            if server.id in server_tools_map:
+                mcp_tool = server_tools_map[server.id]
+                # Check if connected by looking at functions
+                if hasattr(mcp_tool, 'functions') and mcp_tool.functions:
+                    server_status["status"] = "connected"
+                    server_status["tools_count"] = len(mcp_tool.functions)
+                    server_status["tools"] = [
+                        {
+                            "name": getattr(func, 'name', str(func)),
+                            "description": getattr(func, 'description', ''),
+                        }
+                        for func in mcp_tool.functions
+                    ]
+                else:
+                    # Tools instance exists but no functions - likely failed to connect
+                    server_status["status"] = "failed"
+                    server_status["error"] = "No tools available - connection may have failed"
+            else:
+                server_status["status"] = "not_configured"
+                server_status["error"] = "Server not in active configuration"
+
+        status_list.append(server_status)
+
+    # Calculate totals
+    total_connected = sum(1 for s in status_list if s["status"] == "connected")
+    total_tools = sum(s["tools_count"] for s in status_list)
+
+    return {
+        "servers": status_list,
+        "summary": {
+            "total": len(status_list),
+            "enabled": sum(1 for s in status_list if s["enabled"]),
+            "connected": total_connected,
+            "failed": sum(1 for s in status_list if s["status"] == "failed"),
+            "total_tools": total_tools,
+        }
+    }
 
 
 @base_app.get("/api/servers/{server_id}")
@@ -277,10 +324,19 @@ async def toggle_server(server_id: str, enabled: bool = Query(...)):
 
 @base_app.post("/api/servers/reconnect")
 async def reconnect_servers():
-    """Reconnect to all enabled MCP servers."""
-    global mcp_tools_list
-    mcp_tools_list = await connect_mcp_servers()
-    return {"message": "Reconnected to MCP servers", "connected": len(mcp_tools_list)}
+    """Reconnect to all enabled MCP servers.
+
+    Note: This requires a server restart to take effect with AgentOS.
+    AgentOS manages MCP lifecycle, so config changes need a restart.
+    """
+    # With AgentOS, MCP connections are managed at startup
+    # Return info about configured servers
+    enabled_servers = config_manager.get_enabled_servers()
+    return {
+        "message": "Server restart required for MCP reconnection with AgentOS",
+        "configured": len(enabled_servers),
+        "servers": [s.name for s in enabled_servers]
+    }
 
 
 @base_app.get("/api/model")
@@ -302,27 +358,29 @@ async def update_model_config(request: ModelUpdateRequest):
 async def list_tools():
     """List all available tools from connected MCP servers."""
     tools = []
-    for mcp_tool in mcp_tools_list:
-        if hasattr(mcp_tool, 'functions') and mcp_tool.functions:
-            for func in mcp_tool.functions:
-                tools.append({
-                    "name": getattr(func, 'name', str(func)),
-                    "description": getattr(func, 'description', ''),
-                })
+    # Get tools from the agent (managed by AgentOS)
+    if mcp_agent and mcp_agent.tools:
+        for tool in mcp_agent.tools:
+            if hasattr(tool, 'functions') and tool.functions:
+                for func in tool.functions:
+                    tools.append({
+                        "name": getattr(func, 'name', str(func)),
+                        "description": getattr(func, 'description', ''),
+                    })
     return {"tools": tools, "count": len(tools)}
 
 
 # ============== Create AgentOS ==============
 
-# Create agent with MCP tools (will be updated on startup)
-mcp_agent = create_mcp_agent([])
+# Create agent with MCP tools - AgentOS automatically manages MCPTools lifecycle
+mcp_agent = create_mcp_agent()
 
 # Create AgentOS instance with the agent
 agent_os = AgentOS(
     name="MCP Client",
     description="A generic MCP client for connecting to any MCP server",
     agents=[mcp_agent],
-    base_app=base_app,  # Use our custom app with MCP routes
+    base_app=base_app,  # Include our custom MCP management routes
 )
 
 # Get the FastAPI app from AgentOS

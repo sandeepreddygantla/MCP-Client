@@ -1,11 +1,12 @@
 'use client'
 
 import { MCPServerCard } from './MCPServerCard'
-import type { MCPServer } from '@/types/os'
+import type { MCPServer, MCPServerStatus } from '@/types/os'
 import Icon from '@/components/ui/icon'
 
 interface MCPServerListProps {
   servers: MCPServer[]
+  serverStatus: Record<string, MCPServerStatus>
   onEdit: (server: MCPServer) => void
   onDelete: (id: string) => void
   onToggle: (id: string, enabled: boolean) => void
@@ -13,6 +14,7 @@ interface MCPServerListProps {
 
 export function MCPServerList({
   servers,
+  serverStatus,
   onEdit,
   onDelete,
   onToggle
@@ -40,6 +42,7 @@ export function MCPServerList({
         <MCPServerCard
           key={server.id}
           server={server}
+          status={serverStatus[server.id]}
           onEdit={onEdit}
           onDelete={onDelete}
           onToggle={onToggle}

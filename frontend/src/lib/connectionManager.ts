@@ -183,10 +183,13 @@ export function needsMigration(
 /**
  * Generate a default local connection
  */
+// Default endpoint from environment variable or fallback
+const DEFAULT_ENDPOINT = process.env.NEXT_PUBLIC_AGENTOS_ENDPOINT || 'http://localhost:8888'
+
 export function generateDefaultConnection(): CreateConnectionInput {
   return {
     name: 'Local AgentOS',
-    endpoint: 'http://localhost:7777',
+    endpoint: DEFAULT_ENDPOINT,
     apiKey: '',
     environment: 'local',
     tags: ['default']
