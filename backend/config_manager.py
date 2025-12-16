@@ -71,9 +71,9 @@ class ConfigManager:
             config_path: Path to the configuration file. Defaults to config/mcp_servers.json
         """
         if config_path is None:
-            # Default to config/mcp_servers.json relative to project root
-            project_root = Path(__file__).parent.parent
-            config_path = project_root / "config" / "mcp_servers.json"
+            # Default to config/mcp_servers.json relative to backend folder
+            backend_root = Path(__file__).parent
+            config_path = backend_root / "config" / "mcp_servers.json"
 
         self.config_path = Path(config_path)
         self._config: Optional[AppConfig] = None

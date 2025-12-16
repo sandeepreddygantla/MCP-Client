@@ -17,7 +17,7 @@ from agno.db.sqlite import SqliteDb
 
 from mcp import StdioServerParameters
 
-from .config_manager import (
+from config_manager import (
     ConfigManager,
     MCPServerConfig,
     TransportType,

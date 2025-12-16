@@ -30,7 +30,7 @@ from agno.os import AgentOS
 
 from mcp import StdioServerParameters
 
-from .config_manager import ConfigManager, MCPServerConfig, TransportType, ModelConfig
+from config_manager import ConfigManager, MCPServerConfig, TransportType, ModelConfig
 
 # Load environment variables
 load_dotenv()

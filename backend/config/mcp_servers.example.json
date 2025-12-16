@@ -1,0 +1,83 @@
+{
+  "servers": [
+    {
+      "id": "filesystem",
+      "name": "Filesystem Server",
+      "description": "Access local filesystem",
+      "enabled": true,
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@anthropic-ai/mcp-server-filesystem@latest",
+        "/path/to/your/directory"
+      ],
+      "url": null,
+      "headers": {},
+      "env": {},
+      "timeout": 300,
+      "sse_read_timeout": 300
+    },
+    {
+      "id": "github",
+      "name": "GitHub Server",
+      "description": "Access GitHub repositories",
+      "enabled": false,
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "url": null,
+      "headers": {},
+      "env": {
+        "GITHUB_TOKEN": "your-github-token"
+      },
+      "timeout": 300,
+      "sse_read_timeout": 300
+    },
+    {
+      "id": "chrome-devtools",
+      "name": "Chrome DevTools",
+      "description": "Browser automation and debugging",
+      "enabled": false,
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@latest"
+      ],
+      "url": null,
+      "headers": {},
+      "env": {},
+      "timeout": 600,
+      "sse_read_timeout": 300
+    },
+    {
+      "id": "sequential-thinking",
+      "name": "Sequential Thinking",
+      "description": "Step-by-step reasoning tool",
+      "enabled": false,
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ],
+      "url": null,
+      "headers": {},
+      "env": {},
+      "timeout": 600,
+      "sse_read_timeout": 300
+    }
+  ],
+  "default_model": {
+    "provider": "openai",
+    "model_id": "gpt-4o-mini",
+    "api_key_env": null,
+    "base_url": null,
+    "temperature": 0.7,
+    "max_tokens": null
+  }
+}

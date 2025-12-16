@@ -1,7 +1,7 @@
 [project]
-name = "mcp-client-agno"
+name = "mcp-client-backend"
 version = "0.1.0"
-description = "Add your description here"
+description = "MCP Client Backend - A generic MCP client using Agno framework"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

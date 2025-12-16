@@ -33,7 +33,8 @@ env/
 
 # Data and config (user-specific)
 data/
-config/mcp_servers.json
+backend/data/
+backend/config/mcp_servers.json
 
 # IDE
 .idea/
