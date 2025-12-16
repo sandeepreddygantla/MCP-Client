@@ -15,7 +15,7 @@ from rich.console import Console
 from rich.panel import Panel
 from dotenv import load_dotenv
 
-# Add src to path
+# Add project root to path
 sys.path.insert(0, str(Path(__file__).parent))
 
 app = typer.Typer(
@@ -47,7 +47,7 @@ def serve(
 
     import uvicorn
     uvicorn.run(
-        "src.app:app",
+        "backend.app:app",
         host=host,
         port=port,
         reload=reload,
@@ -70,14 +70,14 @@ def chat():
         title="CLI Chat",
     ))
 
-    from src.mcp_client import run_cli_chat
+    from backend.mcp_client import run_cli_chat
     asyncio.run(run_cli_chat())
 
 
 @app.command()
 def list_servers():
     """List all configured MCP servers."""
-    from src.config_manager import ConfigManager
+    from backend.config_manager import ConfigManager
 
     config_manager = ConfigManager()
     config = config_manager.get_config()
@@ -113,7 +113,7 @@ def add_server(
     enabled: bool = typer.Option(True, "--enabled/--disabled", help="Enable/disable the server"),
 ):
     """Add a new MCP server configuration."""
-    from src.config_manager import ConfigManager, MCPServerConfig, TransportType
+    from backend.config_manager import ConfigManager, MCPServerConfig, TransportType
 
     config_manager = ConfigManager()
 
@@ -148,7 +148,7 @@ def remove_server(
     server_id: str = typer.Argument(..., help="Server ID to remove"),
 ):
     """Remove an MCP server configuration."""
-    from src.config_manager import ConfigManager
+    from backend.config_manager import ConfigManager
 
     config_manager = ConfigManager()
 
@@ -165,7 +165,7 @@ def toggle_server(
     enable: bool = typer.Option(None, "--enable/--disable", help="Enable or disable the server"),
 ):
     """Enable or disable an MCP server."""
-    from src.config_manager import ConfigManager
+    from backend.config_manager import ConfigManager
 
     config_manager = ConfigManager()
     server = config_manager.get_server_by_id(server_id)
@@ -185,7 +185,7 @@ def toggle_server(
 @app.command()
 def show_config():
     """Show the current configuration."""
-    from src.config_manager import ConfigManager
+    from backend.config_manager import ConfigManager
 
     config_manager = ConfigManager()
     console.print(config_manager.export_config())
@@ -197,7 +197,7 @@ def test_connection():
     load_dotenv()
 
     async def _test():
-        from src.mcp_client import MCPClient
+        from backend.mcp_client import MCPClient
 
         console.print("\n[bold]Testing MCP Server Connections...[/bold]\n")
 
