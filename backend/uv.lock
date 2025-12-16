@@ -573,7 +573,7 @@ wheels = [
 ]
 
 [[package]]
-name = "mcp-client-agno"
+name = "mcp-client-backend"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
