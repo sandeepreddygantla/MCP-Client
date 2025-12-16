@@ -328,6 +328,15 @@ agent_os = AgentOS(
 # Get the FastAPI app from AgentOS
 app = agent_os.get_app()
 
+# Add CORS middleware to the AgentOS app (must be added after get_app())
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # Run the application
 if __name__ == "__main__":
